@@ -39,32 +39,27 @@ instance FromJSON Online where
   parseJSON (Object o) = do
     count <- read <$> o .: "count"
     charInfo <- o .: "characters"
-    let names = flip mapMaybe charInfo $ parseMaybe $ \obj -> obj .: "name"
+    let names = mapMaybe (parseMaybe $ \obj -> obj .: "name") charInfo
     return $ Online count names
   parseJSON _ = mempty
 
-data City = Hashan | Mhaldor | Ashtan | Cyrene | Targossas | None
-            deriving (Show, Eq, Read, Generic)
-
-instance FromJSON City
-
 data Character = Character { name :: Text
-                           , city :: City
+                           , city :: Text --City
+                           , house :: Text
                            , level :: Int
                            , class_ :: Text --Class
                            , playerKills :: Int
                            , mobKills :: Int
                            } deriving (Show)
 
--- TODO: getOnline only returns name and zeros out everything else
--- when updating the db, ignore the field if it's 0? mappend
 instance FromJSON Character where
   parseJSON (Object o) = do
     name <- o .: "name"
-    city <- o .:? "city" .!= None
+    city <- o .:? "city" .!= "(none)"
+    house <- o .:? "house" .!= "(none)"
     level <- (fmap . fmap) read (o .:? "level") .!= 0
-    class_ <- o .:? "class" .!= ""
-    return $ Character name city level class_ 0 0
+    class_ <- o .:? "class" .!= "(unknown)"
+    return $ Character name city house level class_ 0 0
   parseJSON _ = mempty
 
 data EventType = DEA | LUP | LDN | DUE | NEW deriving (Show, Read, Eq, Generic)
@@ -91,15 +86,16 @@ achaeaAPI :: Proxy AchaeaAPI
 achaeaAPI = Proxy
 
 getOnline :: EitherT ServantError IO Online
+getCharacter' :: Text -> EitherT ServantError IO Character
 getCharacter :: Text -> EitherT ServantError IO Character
+getCharacter char = getCharacter' $ char `T.append` ".json"
 getEvents :: EitherT ServantError IO [GameEvent]
-getOnline :<|> getCharacter :<|> getEvents = client achaeaAPI (BaseUrl Http "api.achaea.com" 80)
+getOnline :<|> getCharacter' :<|> getEvents = client achaeaAPI (BaseUrl Http "api.achaea.com" 80)
 
 test :: IO (Either ServantError ())
 test = runEitherT $ do
   chars <- getOnline
   liftIO . putStrLn $ show (count chars) ++ " characters"
-
   return ()
 
 
