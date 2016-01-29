@@ -3,9 +3,9 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bot.GameAPI ( Online
-                   , GameEvent
-                   , Character
+module Bot.GameAPI ( Online (..)
+                   , GameEvent (..)
+                   , Character (..)
                    , getOnline
                    , getCharacter
                    , getEvents ) where
