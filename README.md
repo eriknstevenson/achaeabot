@@ -10,8 +10,8 @@ Providing real-time game information on [twitter](link-to-twitter).
 * Suggestions welcome
 
 ## Tech
-* [Iron Realms Entertainment API](link-to-docs)
-* [Servant](link-to-hackage)
+* [Iron Realms Entertainment API](http://www.ironrealms.com/IREAPIdocumentation.pdf)
+* [Servant](https://hackage.haskell.org/package/servant)
 
 ## Building
     $ git clone https://github.com/narrative/achaeabot.git
