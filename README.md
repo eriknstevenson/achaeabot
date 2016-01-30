@@ -1,5 +1,5 @@
 # Achaea Twitter Bot
-Providing real-time game information on [twitter](link-to-twitter).
+Providing real-time game information on [twitter](http://twitter.com/achaeabot).
 
 ## Features
 * Notifications for player kills
