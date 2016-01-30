@@ -9,21 +9,23 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
--- Takes a string like "Tecton was slain by Romeo."
--- and returns (Victim, Killer) aka ("Juliet", "Romeo")
-getPlayersFromDesc :: Text -> Result (Text, Text)
-getPlayersFromDesc = parse parsePlayers . T.encodeUtf8
+-- Takes a string like "Romeo was slain by Tecton."
+-- and returns (Killer, Victim) aka ("Tecton", "Romeo")
+getPlayersFromDesc :: Text -> Either String (Text, Text)
+getPlayersFromDesc = parseOnly parsePlayers . T.encodeUtf8
 
 parsePlayers :: Parser (Text, Text)
 parsePlayers = do
-  victim <- word
+  victim <- name
   space
   string "was slain by"
   space
-  killer <- word
+  killer <- name
   char '.'
-  return $ mapTuple T.pack (victim, killer)
-    where mapTuple f (a,b) = (f a, f b)
-          word = many1 letter_ascii
+  case killer of
+    "misadventure" -> fail "not a player"
+    _ -> return $ mapTuple T.pack (killer, victim)
+  where mapTuple f (a,b) = (f a, f b)
+        name = many1 letter_ascii
 
 
