@@ -4,7 +4,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Bot.GameAPI ( getKills
-                   , GameEvent (..) ) where
+                   , GameEvent (..)
+                   , Character (..)
+                   ) where
 
 import           Control.Applicative
 import           Control.Monad
