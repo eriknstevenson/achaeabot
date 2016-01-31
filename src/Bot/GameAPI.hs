@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bot.GameAPI ( getKills 
+module Bot.GameAPI ( getKills
                    , GameEvent (..) ) where
 
 import           Control.Applicative
@@ -63,7 +63,6 @@ data Character = Character { name :: Text
                            , level :: Int
                            , class_ :: Text --Class
                            , playerKills :: Int
-                           , mobKills :: Int
                            } deriving (Show)
 
 instance FromJSON Character where
@@ -74,8 +73,7 @@ instance FromJSON Character where
     level <- read <$> o .: "level"
     class_ <- o .: "class"
     playerKills <- read <$> o .: "player_kills"
-    mobKills <- read <$> o .: "mob_kills"
-    return $ Character name city house level class_ playerKills mobKills
+    return $ Character name city house level class_ playerKills
   parseJSON _ = mempty
 
 data EventType = DEA | LUP | LDN | DUE | NEW
@@ -107,7 +105,7 @@ getKills :: IO [GameEvent]
 getKills = do
   feed <- runEitherT gameFeed
   case feed of
-    Right goodData -> do
+    Right goodData ->
       liftM catMaybes . sequence $ map makeGameEvent (onlyDeaths goodData)
     Left _ -> error "Invalid API request"
   where
@@ -125,8 +123,8 @@ getKInfo = getCharInfo extractKiller
 getVInfo = getCharInfo extractVictim
 
 getCharInfo :: (Event -> Maybe Text) -> Event -> IO (Maybe Character)
-getCharInfo f evt = do
-  case (f evt) of
+getCharInfo f evt =
+  case f evt of
     Nothing -> return Nothing
     Just validName -> do
       info <- runEitherT $ getCharacter validName
@@ -137,7 +135,7 @@ getCharInfo f evt = do
 extractKiller = getNameFromEvent fst
 extractVictim = getNameFromEvent snd
 
-getNameFromEvent :: ( (Text, Text) -> a ) -> Event -> (Maybe a)
+getNameFromEvent :: ( (Text, Text) -> a ) -> Event -> Maybe a
 getNameFromEvent f evt = case runParser evt of
   Left _ -> Nothing
   Right validParse -> Just (f validParse)
@@ -158,4 +156,4 @@ parsePlayers = do
     _ -> return $ mapTuple T.pack (killer, victim)
   where mapTuple f (a,b) = (f a, f b)
         name = A.many1 A.letter_ascii
-        
+
