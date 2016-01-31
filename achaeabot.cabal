@@ -15,12 +15,11 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Bot, Bot.GameAPI, Bot.TwitterAPI, Bot.Parser
+  exposed-modules:     Bot, Bot.GameAPI, Bot.TwitterAPI
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , attoparsec
                      , conduit
-                     --, conduit-combinators
                      , either
                      , servant
                      , servant-client

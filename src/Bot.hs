@@ -14,7 +14,6 @@ such as: getNumberOfKills :: [GameEvent] -> Int
 consider building in 'getCharacter'-returned info into the
 GameEvent object itself.
 -}
-data BotData = BotData { events :: [GameEvent]
-               }
+data BotData = BotData { events :: [GameEvent] }
 
 
