@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Bot, Bot.GameAPI, Bot.TwitterAPI
+  exposed-modules:     Bot, Bot.GameAPI, Bot.TwitterAPI, Bot.Database
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , attoparsec
@@ -23,6 +23,7 @@ library
                      , bytestring
                      , conduit
                      , either
+                     , hedis
                      , http-conduit
                      , lens
                      , resourcet

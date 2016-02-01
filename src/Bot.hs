@@ -13,10 +13,12 @@ import           Control.Monad.Trans.State
 import           Data.List
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Database.Redis
 import           Network.HTTP.Client.Conduit
 import           Safe
 import qualified Web.Twitter.Conduit as CT
 
+import           Bot.Database
 import           Bot.GameAPI
 import           Bot.TwitterAPI
 
@@ -25,9 +27,6 @@ could store some statistics
 such as # of kills by class, etc
 but some of the statistics can be calculated
 such as: getNumberOfKills :: [GameEvent] -> Int
-
-consider building in 'getCharacter'-returned info into the
-GameEvent object itself.
 -}
 
 type Bot = StateT BotState IO
@@ -54,13 +53,15 @@ runBot twInfo mgr = flip evalStateT initialState . forever $ do
   let newID = maximumDef prevID $ map (id_ . details) newEvents
   put s { lastID = newID
         , killEvents = nub $ newEvents ++ previous}
-  all <- gets killEvents
-  liftIO . print $ length all
-  liftIO . print $ newID
-  liftIO . threadDelay $ 1000000 * 15
+  let tweets = map printKill newEvents
+  liftIO $ mapM (putStrLn . T.unpack) tweets
+  -- Pause for a minute
+  liftIO . threadDelay $ 1000000 * 60
 
 --runResourceT $ call twInfo mgr $ apicall
 
 test :: IO ()
 test = putStrLn "hello world"
 
+printKill :: GameEvent -> Text
+printKill x = T.pack $ "Oh snap! " ++ show (name . killer $ x) ++ " just killed " ++ show (name . victim $ x) ++ "!"
