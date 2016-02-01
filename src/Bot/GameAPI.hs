@@ -6,6 +6,7 @@
 module Bot.GameAPI ( getKills
                    , GameEvent (..)
                    , Character (..)
+                   , Event (..)
                    ) where
 
 import           Control.Applicative
@@ -32,7 +33,7 @@ import           Servant.Client
 type AchaeaAPI =
        "characters.json" :> Get '[JSON] Online
   :<|> "characters" :> Capture "name" Text :> Get '[JSON] Character
-  :<|> "gamefeed.json" :> Get '[JSON] [Event]
+  :<|> "gamefeed.json" :> QueryParam "id" Int :> Get '[JSON] [Event]
 
 achaeaAPI :: Proxy AchaeaAPI
 achaeaAPI = Proxy
@@ -41,7 +42,7 @@ getOnline :: EitherT ServantError IO Online
 getCharacter' :: Text -> EitherT ServantError IO Character
 getCharacter :: Text -> EitherT ServantError IO Character
 getCharacter char = getCharacter' $ char `T.append` ".json"
-gameFeed :: EitherT ServantError IO [Event]
+gameFeed :: Maybe Int -> EitherT ServantError IO [Event]
 
 getOnline :<|> getCharacter' :<|> gameFeed = client achaeaAPI (BaseUrl Http "api.achaea.com" 80)
 
@@ -78,12 +79,12 @@ instance FromJSON Character where
     return $ Character name city house level class_ playerKills
   parseJSON _ = mempty
 
-data EventType = DEA | LUP | LDN | DUE | NEW
+data EventType = DEA | LUP | LDN | DUE | NEW | ARE
   deriving (Show, Read, Eq, Generic)
 
 instance FromJSON EventType
 
-data Event = Event { id :: Int
+data Event = Event { id_ :: Int
                    , desc :: Text
                    , type_ :: EventType
                    , date :: Text --TODO: parse into Date
@@ -91,11 +92,11 @@ data Event = Event { id :: Int
 
 instance FromJSON Event where
   parseJSON (Object o) = do
-    id <- o .: "id"
+    id_ <- o .: "id"
     desc <- o .: "description"
     type_ <- o .: "type"
     date <- o .: "date"
-    return $ Event id desc type_ date
+    return $ Event id_ desc type_ date
   parseJSON _ = mempty
 
 data GameEvent = GameEvent { details :: Event
@@ -103,13 +104,15 @@ data GameEvent = GameEvent { details :: Event
                            , victim :: Character
                            } deriving (Show)
 
-getKills :: IO [GameEvent]
-getKills = do
-  feed <- runEitherT gameFeed
+getKills :: Maybe Int -> IO [GameEvent]
+getKills id_ = do
+  feed <- runEitherT $ gameFeed id_
   case feed of
     Right goodData ->
       liftM catMaybes . sequence $ map makeGameEvent (onlyDeaths goodData)
-    Left _ -> error "Invalid API request"
+    Left str -> do
+      print str
+      error "Invalid API request"
   where
     onlyDeaths = filter (\evt -> type_ evt == DEA)
 

@@ -21,6 +21,7 @@ library
                      , attoparsec
                      , conduit
                      , either
+                     , safe
                      , servant
                      , servant-client
                      , text
