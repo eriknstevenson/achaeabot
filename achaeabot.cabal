@@ -25,6 +25,7 @@ library
                      , either
                      , http-conduit
                      , lens
+                     , resourcet
                      , safe
                      , servant
                      , servant-client

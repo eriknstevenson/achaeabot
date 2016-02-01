@@ -8,12 +8,14 @@ module Bot where
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
 import           Data.List
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Network.HTTP.Client.Conduit
 import           Safe
-import           Web.Authenticate.OAuth
+import qualified Web.Twitter.Conduit as CT
 
 import           Bot.GameAPI
 import           Bot.TwitterAPI
@@ -39,11 +41,12 @@ initialState = BotState 0 []
 
 main' :: IO ()
 main' = do
-  creds <- getTokens--get credentials
-  runBot creds
+  twInfo <- setupAuth
+  mgr <- newManager
+  runBot twInfo mgr
 
-runBot :: OAuth -> IO ()
-runBot creds = flip evalStateT initialState . forever $ do
+runBot :: CT.TWInfo -> Manager -> IO ()
+runBot twInfo mgr = flip evalStateT initialState . forever $ do
   s <- get
   prevID <- gets lastID
   previous <- gets killEvents
@@ -55,6 +58,8 @@ runBot creds = flip evalStateT initialState . forever $ do
   liftIO . print $ length all
   liftIO . print $ newID
   liftIO . threadDelay $ 1000000 * 15
+
+--runResourceT $ call twInfo mgr $ apicall
 
 test :: IO ()
 test = putStrLn "hello world"

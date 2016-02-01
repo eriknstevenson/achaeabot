@@ -16,12 +16,16 @@ import           Web.Authenticate.OAuth
 import           Web.Twitter.Conduit
 import           Web.Twitter.Types.Lens
 
-getTokens :: IO OAuth
-getTokens = do
-  consumerKey <- getEnv "ACHAEAOAUTHKEY"
-  consumerSecret <- getEnv "ACHAEAOAUTHSECRET"
-  return $
-    twitterOAuth { oauthConsumerKey = BS.pack consumerKey
-                 , oauthConsumerSecret = BS.pack consumerSecret
-                 }
+setupAuth :: IO TWInfo
+setupAuth = do
+  consumerKey <- BS.pack <$> (getEnv "ACHAEACONSUMERKEY")
+  consumerSecret <- BS.pack <$> (getEnv "ACHAEACONSUMERSECRET")
+  token <- BS.pack <$> (getEnv "ACHAEATOKEN")
+  tokenKey <- BS.pack <$> (getEnv "ACHAEATOKENSECRET")
+  let oauth = twitterOAuth { oauthConsumerKey = consumerKey
+                           , oauthConsumerSecret = consumerSecret }
+      cred = newCredential token tokenKey
+  return $ setCredential oauth cred def
+
+
 
