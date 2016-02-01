@@ -66,8 +66,9 @@ data Character = Character { name :: Text
                            , level :: Int
                            , class_ :: Text --Class
                            , playerKills :: Int
-                           } deriving (Show)
+                           } deriving (Show, Eq)
 
+-- TODO: handle city being (hidden)
 instance FromJSON Character where
   parseJSON (Object o) = do
     name <- o .: "name"
@@ -102,7 +103,7 @@ instance FromJSON Event where
 data GameEvent = GameEvent { details :: Event
                            , killer :: Character
                            , victim :: Character
-                           } deriving (Show)
+                           } deriving (Show, Eq)
 
 getKills :: Maybe Int -> IO [GameEvent]
 getKills id_ = do

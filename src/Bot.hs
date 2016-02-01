@@ -2,16 +2,18 @@
            , module Bot.TwitterAPI
            , runBot
            ) where -}
-           
+
 module Bot where
 
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.State
+import           Data.List
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Safe
+import           Web.Authenticate.OAuth
 
 import           Bot.GameAPI
 import           Bot.TwitterAPI
@@ -35,18 +37,25 @@ data BotState = BotState { lastID :: Int
 initialState :: BotState
 initialState = BotState 0 []
 
-runBot :: IO ()
-runBot = flip evalStateT initialState . forever $ do
+main' :: IO ()
+main' = do
+  creds <- getTokens--get credentials
+  runBot creds
+
+runBot :: OAuth -> IO ()
+runBot creds = flip evalStateT initialState . forever $ do
   s <- get
   prevID <- gets lastID
   previous <- gets killEvents
   newEvents <- liftIO $ getKills (Just prevID)
-  put s { lastID = 0 maximumDef 0 $ map id_ $ map details newEvents
-        , killEvents = newEvents ++ previous}
-  liftIO . print $ previous
-  liftIO . threadDelay $ 1000000 * 5
+  let newID = maximumDef prevID $ map (id_ . details) newEvents
+  put s { lastID = newID
+        , killEvents = nub $ newEvents ++ previous}
+  all <- gets killEvents
+  liftIO . print $ length all
+  liftIO . print $ newID
+  liftIO . threadDelay $ 1000000 * 15
 
-  
 test :: IO ()
 test = putStrLn "hello world"
 
