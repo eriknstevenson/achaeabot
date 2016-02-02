@@ -1,7 +1,4 @@
-{-module Bot ( module Bot.GameAPI
-           , module Bot.TwitterAPI
-           , runBot
-           ) where -}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Bot where
 
@@ -13,7 +10,7 @@ import           Control.Monad.Trans.State
 import           Data.List
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Database.Redis
+import qualified Database.Redis as DB
 import           Network.HTTP.Client.Conduit
 import           Safe
 import qualified Web.Twitter.Conduit as CT
@@ -64,4 +61,4 @@ test :: IO ()
 test = putStrLn "hello world"
 
 printKill :: GameEvent -> Text
-printKill x = T.pack $ "Oh snap! " ++ show (name . killer $ x) ++ " just killed " ++ show (name . victim $ x) ++ "!"
+printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
