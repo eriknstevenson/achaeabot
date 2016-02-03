@@ -7,6 +7,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
+import qualified Data.ByteString.Char8 as BS
 import           Data.List
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -39,27 +40,39 @@ main' :: IO ()
 main' = do
   twInfo <- setupAuth
   mgr <- newManager
-  runBot twInfo mgr
+  db <- DB.connect DB.defaultConnectInfo
+  runBot twInfo mgr db
 
-runBot :: CT.TWInfo -> Manager -> IO ()
-runBot twInfo mgr = flip evalStateT initialState . forever $ do
+runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
+runBot twInfo mgr db = flip evalStateT initialState . forever $ do
   s <- get
   prevID <- gets lastID
   previous <- gets killEvents
   newEvents <- liftIO $ getKills (Just prevID)
-  let newID = maximumDef prevID $ map (id_ . details) newEvents
+  let idList = map (id_ . details) newEvents
+      newID = maximumDef prevID idList
   put s { lastID = newID
         , killEvents = nub $ newEvents ++ previous}
-
+  liftIO . DB.runRedis db $ do
+      --liftIO . putStrLn $ "adding new event ids."
+      eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
+      return ()
+      --liftIO . putStrLn $ "doing other crap"
   let tweets = map printKill newEvents
   liftIO $ mapM (putStrLn . T.unpack) tweets
   -- Pause for a minute
-  liftIO . threadDelay $ 1000000 * 60
+  pauseFor oneMinute
 
 --runResourceT $ call twInfo mgr $ apicall
 
+--parseTimeM False defaultTimeLocale "%F %T" "2016-02-03 15:53:25"
+
 test :: IO ()
 test = putStrLn "hello world"
+
+pauseFor = liftIO . threadDelay
+
+oneMinute = 1000000 * 60
 
 printKill :: GameEvent -> Text
 printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]

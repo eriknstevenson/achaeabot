@@ -4,11 +4,10 @@ Providing real-time game information on [twitter](http://twitter.com/achaeabot).
 ## Features
 * Notifications for player kills
 * Weekly class usage statistics
-* Raid alerts
 * Stores data for 30 days
 
 ## Planned features
-* Suggestions welcome
+* Raid alerts
 
 ## Tech
 * [Iron Realms Entertainment API](http://www.ironrealms.com/IREAPIdocumentation.pdf)

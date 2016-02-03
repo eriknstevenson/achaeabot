@@ -7,6 +7,8 @@ module Bot.GameAPI ( getKills
                    , GameEvent (..)
                    , Character (..)
                    , Event (..)
+                   --temporary
+                   , gameFeed 
                    ) where
 
 import           Control.Applicative
@@ -99,6 +101,7 @@ instance FromJSON Event where
     date <- o .: "date"
     return $ Event id_ desc type_ date
   parseJSON _ = mempty
+
 
 data GameEvent = GameEvent { details :: Event
                            , killer :: Character
