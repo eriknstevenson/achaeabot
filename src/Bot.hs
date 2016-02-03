@@ -50,6 +50,7 @@ runBot twInfo mgr = flip evalStateT initialState . forever $ do
   let newID = maximumDef prevID $ map (id_ . details) newEvents
   put s { lastID = newID
         , killEvents = nub $ newEvents ++ previous}
+
   let tweets = map printKill newEvents
   liftIO $ mapM (putStrLn . T.unpack) tweets
   -- Pause for a minute
