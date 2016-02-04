@@ -37,36 +37,34 @@ main' = do
 
 runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = forever $ do
-  putStrLn "stuck in cycle."
-  dbResp <- DB.runRedis db $ DB.get "prevID"
-  case dbResp of
-    Right prevID -> 
-      case prevID of
-        Just validID -> do
-          let validID' = read . BS.unpack $ validID
-          newEvents <- getKills (Just validID')
-          case newEvents of
-            Just validEvents -> do
-              let idList = map (id_ . details) validEvents
-                  newID = maximumDef validID' idList
-              DB.runRedis db $ do
-                DB.set "prevID" $ BS.pack . show $ newID
-                eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
-                mapM_ storeEvent validEvents
-              let tweets = map printKill validEvents
-              mapM_ (putStrLn . T.unpack) tweets
-            Nothing -> putStrLn "something went wrong while fetching data."
-        Nothing -> do
-          DB.runRedis db $ DB.set "prevID" "0"
-          putStrLn "prevID did not exist. It is now set to 0."
-    Left reply -> print reply
-  -- Pause for a minute
+  updateEvents db
   pauseFor oneMinute
 
 pauseFor = liftIO . threadDelay
 oneMinute = 1000000 * 60
 
---storeEvent :: GameEvent -> RedisTx (Queued ByteString)
+updateEvents db = do
+  dbResp <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
+  case dbResp of
+    Left reply -> print reply
+    Right prevID -> 
+      case prevID of
+        Nothing -> putStrLn "prevID not found (should never happen)"
+        Just validID -> do
+          let validID' = read . BS.unpack $ validID
+          newEvents <- getKills (Just validID')
+          case newEvents of
+            Nothing -> putStrLn "something went wrong while fetching data."
+            Just validEvents -> do
+              let idList = map (id_ . details) validEvents
+                  newID = maximumDef validID' idList
+              DB.runRedis db $ do
+                DB.set "prevID" $ BS.pack . show $ newID
+                DB.sadd "events" $ map (BS.pack . show) idList
+                mapM_ storeEvent validEvents
+              let tweets = map printKill validEvents
+              mapM_ (putStrLn . T.unpack) tweets
+
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
   DB.hset key "killerName" $ getData killer name
