@@ -48,18 +48,22 @@ runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = flip evalStateT initialState . forever $ do
   s <- get
   prevID <- gets lastID
-  newEvents <- liftIO $ getKills (Just prevID)
-  let idList = map (id_ . details) newEvents
-      newID = maximumDef prevID idList
-  put s { lastID = newID }
-  liftIO . DB.runRedis db $ do
-      --liftIO . putStrLn $ "adding new event ids."
-      eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
-      mapM_ storeEvent newEvents
+  maybeNewEvents <- liftIO $ getKills (Just prevID)
+  case maybeNewEvents of
+    Just newEvents -> do
+      let idList = map (id_ . details) newEvents
+          newID = maximumDef prevID idList
+      put s { lastID = newID }
+      liftIO . DB.runRedis db $ do
+        --liftIO . putStrLn $ "adding new event ids."
+        eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
+        mapM_ storeEvent newEvents
       return ()
       --liftIO . putStrLn $ "doing other crap"
-  let tweets = map printKill newEvents
-  liftIO $ mapM (putStrLn . T.unpack) tweets
+      let tweets = map printKill newEvents
+      liftIO $ mapM (putStrLn . T.unpack) tweets
+      return ()
+    Nothing -> liftIO . putStrLn $ "something went wrong while fetching data."
   -- Pause for a minute
   pauseFor oneMinute
 

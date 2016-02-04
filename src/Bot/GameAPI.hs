@@ -8,7 +8,7 @@ module Bot.GameAPI ( getKills
                    , Character (..)
                    , Event (..)
                    --temporary
-                   , gameFeed 
+                   , gameFeed
                    ) where
 
 import           Control.Applicative
@@ -106,15 +106,16 @@ data GameEvent = GameEvent { details :: Event
                            , victim :: Character
                            } deriving (Show, Eq)
 
-getKills :: Maybe Int -> IO [GameEvent]
+getKills :: Maybe Int -> IO (Maybe [GameEvent])
 getKills id_ = do
   feed <- runEitherT $ gameFeed id_
   case feed of
-    Right goodData ->
-      liftM catMaybes . sequence $ map makeGameEvent (onlyDeaths goodData)
+    Right goodData -> do
+      evts <- liftM catMaybes . sequence $ map makeGameEvent (onlyDeaths goodData)
+      return . Just $ evts
     Left str -> do
-      print str
-      error "Invalid API request"
+      return Nothing
+      --error "Invalid API request"
   where
     onlyDeaths = filter (\evt -> type_ evt == DEA)
 
@@ -164,8 +165,3 @@ parsePlayers = do
   where mapTuple f (a,b) = (f a, f b)
         name = A.many1 A.letter_ascii
 
--- TODO: handle the following exception:
-{-
-ConnectionError {connectionError = FailedConnectionException "api.achaea.com" 80}
-*** Exception: Invalid API request
--}
