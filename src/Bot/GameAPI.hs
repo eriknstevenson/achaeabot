@@ -31,7 +31,6 @@ import           Servant.API
 import           Servant.Client
 
 -- API definition
-
 type AchaeaAPI =
        "characters.json" :> Get '[JSON] Online
   :<|> "characters" :> Capture "name" Text :> Get '[JSON] Character
@@ -102,7 +101,6 @@ instance FromJSON Event where
     return $ Event id_ desc type_ date
   parseJSON _ = mempty
 
-
 data GameEvent = GameEvent { details :: Event
                            , killer :: Character
                            , victim :: Character
@@ -144,7 +142,7 @@ getCharInfo f evt =
 extractKiller = getNameFromEvent fst
 extractVictim = getNameFromEvent snd
 
-getNameFromEvent :: ( (Text, Text) -> a ) -> Event -> Maybe a
+getNameFromEvent :: ((Text, Text) -> a) -> Event -> Maybe a
 getNameFromEvent f evt = case runParser evt of
   Left _ -> Nothing
   Right validParse -> Just (f validParse)

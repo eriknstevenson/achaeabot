@@ -69,19 +69,20 @@ oneMinute = 1000000 * 60
 --storeEvent :: GameEvent -> RedisTx (Queued ByteString)
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
-      killerName = T.encodeUtf8 . name . killer $ evt
-      killerCity = T.encodeUtf8 . city . killer $ evt
-      killerClass = T.encodeUtf8 . class_ . killer $ evt
-      victimName = T.encodeUtf8 . name . victim $ evt
-      victimCity = T.encodeUtf8 . city . victim $ evt
-      victimClass = T.encodeUtf8 . class_ . victim $ evt
+      killerName = getData killer name
+      killerCity = getData killer city
+      killerClass = getData killer class_
+      victimName = getData victim name
+      victimCity = getData victim city
+      victimClass = getData victim class_
   DB.hset key "killerName" killerName
   DB.hset key "killerCity" killerCity
   DB.hset key "killerClass" killerClass
   DB.hset key "victimName" victimName
   DB.hset key "victimCity" victimCity
   DB.hset key "victimClass" victimClass
-      
+  where getData char field = T.encodeUtf8 . field . char $ evt
+
 printKill :: GameEvent -> Text
 printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
 
