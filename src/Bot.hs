@@ -28,14 +28,6 @@ but some of the statistics can be calculated
 such as: getNumberOfKills :: [GameEvent] -> Int
 -}
 
-type Bot = StateT BotState IO
-
-data BotState = BotState { lastID :: Int }
-                         deriving (Show)
-
-initialState :: BotState
-initialState = BotState 0
-
 main' :: IO ()
 main' = do
   twInfo <- setupAuth
@@ -43,23 +35,31 @@ main' = do
   db <- DB.connect DB.defaultConnectInfo
   runBot twInfo mgr db
 
--- TODO: remove use of state monad and store lastID in the redis db
 runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
-runBot twInfo mgr db = flip evalStateT initialState . forever $ do
-  s <- get
-  prevID <- gets lastID
-  maybeNewEvents <- liftIO $ getKills (Just prevID)
-  case maybeNewEvents of
-    Just newEvents -> do
-      let idList = map (id_ . details) newEvents
-          newID = maximumDef prevID idList
-      put s { lastID = newID }
-      liftIO . DB.runRedis db $ do
-        eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
-        mapM_ storeEvent newEvents
-      let tweets = map printKill newEvents
-      liftIO $ mapM_ (putStrLn . T.unpack) tweets
-    Nothing -> liftIO . putStrLn $ "something went wrong while fetching data."
+runBot twInfo mgr db = forever $ do
+  putStrLn "stuck in cycle."
+  dbResp <- DB.runRedis db $ DB.get "prevID"
+  case dbResp of
+    Right prevID -> 
+      case prevID of
+        Just validID -> do
+          let validID' = read . BS.unpack $ validID
+          newEvents <- getKills (Just validID')
+          case newEvents of
+            Just validEvents -> do
+              let idList = map (id_ . details) validEvents
+                  newID = maximumDef validID' idList
+              DB.runRedis db $ do
+                DB.set "prevID" $ BS.pack . show $ newID
+                eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
+                mapM_ storeEvent validEvents
+              let tweets = map printKill validEvents
+              mapM_ (putStrLn . T.unpack) tweets
+            Nothing -> putStrLn "something went wrong while fetching data."
+        Nothing -> do
+          DB.runRedis db $ DB.set "prevID" "0"
+          putStrLn "prevID did not exist. It is now set to 0."
+    Left reply -> print reply
   -- Pause for a minute
   pauseFor oneMinute
 
