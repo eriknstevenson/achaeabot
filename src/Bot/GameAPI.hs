@@ -89,7 +89,7 @@ instance FromJSON EventType
 data Event = Event { id_ :: Int
                    , desc :: Text
                    , type_ :: EventType
-                   , date :: Text --TODO: parse into Date
+                   , date :: Text
                    } deriving (Show, Eq)
 
 instance FromJSON Event where
@@ -164,3 +164,8 @@ parsePlayers = do
   where mapTuple f (a,b) = (f a, f b)
         name = A.many1 A.letter_ascii
 
+-- TODO: handle the following exception:
+{-
+ConnectionError {connectionError = FailedConnectionException "api.achaea.com" 80}
+*** Exception: Invalid API request
+-}
