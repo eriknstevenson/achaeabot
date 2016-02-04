@@ -55,14 +55,10 @@ runBot twInfo mgr db = flip evalStateT initialState . forever $ do
           newID = maximumDef prevID idList
       put s { lastID = newID }
       liftIO . DB.runRedis db $ do
-        --liftIO . putStrLn $ "adding new event ids."
         eventsRes <- DB.sadd "events" $ map (BS.pack . show) idList
         mapM_ storeEvent newEvents
-      return ()
-      --liftIO . putStrLn $ "doing other crap"
       let tweets = map printKill newEvents
-      liftIO $ mapM (putStrLn . T.unpack) tweets
-      return ()
+      liftIO $ mapM_ (putStrLn . T.unpack) tweets
     Nothing -> liftIO . putStrLn $ "something went wrong while fetching data."
   -- Pause for a minute
   pauseFor oneMinute
@@ -73,18 +69,12 @@ oneMinute = 1000000 * 60
 --storeEvent :: GameEvent -> RedisTx (Queued ByteString)
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
-      killerName = getData killer name
-      killerCity = getData killer city
-      killerClass = getData killer class_
-      victimName = getData victim name
-      victimCity = getData victim city
-      victimClass = getData victim class_
-  DB.hset key "killerName" killerName
-  DB.hset key "killerCity" killerCity
-  DB.hset key "killerClass" killerClass
-  DB.hset key "victimName" victimName
-  DB.hset key "victimCity" victimCity
-  DB.hset key "victimClass" victimClass
+  DB.hset key "killerName" $ getData killer name
+  DB.hset key "killerCity" $ getData killer city
+  DB.hset key "killerClass" $ getData killer class_
+  DB.hset key "victimName" $ getData victim name
+  DB.hset key "victimCity" $ getData victim city
+  DB.hset key "victimClass" $ getData victim class_
   where getData char field = T.encodeUtf8 . field . char $ evt
 
 printKill :: GameEvent -> Text
