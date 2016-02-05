@@ -25,13 +25,6 @@ import           Bot.Database
 import           Bot.GameAPI
 import           Bot.TwitterAPI
 
-{-
-could store some statistics
-such as # of kills by class, etc
-but some of the statistics can be calculated
-such as: getNumberOfKills :: [GameEvent] -> Int
--}
-
 main' :: IO ()
 main' = do
   twInfo <- setupAuth
@@ -52,7 +45,7 @@ oneMinute = 1000000 * 60
 --seconds used for redis expire
 minutely = 60
 hourly = minutely * 60
-daily = hourly * 24
+daily = 5*minutely -- hourly * 24
 monthly = fromIntegral $ daily * 30
 
 -- delete events > 30 days old, performed daily
@@ -62,35 +55,31 @@ expireOld db = do
   case fromR expireFlag of
     Just validFlag -> return ()
     Nothing -> do
-      --flag expired, need to redo the task
       putStrLn "deleting old records."
       events <- DB.runRedis db $ DB.smembers "events"
-      forM_ (fromR events) $ \evt ->
-        DB.runRedis db $ do
-          date <- DB.hget evt "date"
-          case fromR date >>= parseAchaeaTime of
-            Nothing -> removeEvent evt
-            Just parsedDate ->
-              when (diffUTCTime today parsedDate > monthly)
-                removeEvent evt
-      --set the flag again
-      DB.runRedis db $ do
-        DB.set "expireOld" "false" --value doesn't really matter
-        DB.expire "expireOld" daily
+      forM_ (fromR events) (checkDate db today)
+      setTimer db "expireOld" daily
+
+setTimer db k t =
+  DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
+
+checkDate db currentTime evtID = DB.runRedis db $ do
+  date <- DB.hget evtID "date"
+  case fromR date >>= parseAchaeaTime of
+    Nothing -> removeEvent evtID
+    Just parsedDate ->
+      when (diffUTCTime currentTime parsedDate > monthly)
+        (removeEvent evtID)
+  where
+    removeEvent evt = do
+      DB.del [evt] >> DB.srem "events" [evt]
       return ()
+    parseAchaeaTime =
+      parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
 
 fromR :: Either DB.Reply a -> a
 fromR (Left resp) = error $ show resp
 fromR (Right a) = a
-
-removeEvent evt = do
-  DB.del [evt]
-  DB.srem "events" [evt]
-  return ()
-
-parseAchaeaTime :: ByteString -> Maybe UTCTime
-parseAchaeaTime =
-  parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
 
 updateEvents db = do
   prevID <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
@@ -126,4 +115,3 @@ printKill :: GameEvent -> Text
 printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
 
 --runResourceT $ call twInfo mgr $ apicall
---parseTimeM False defaultTimeLocale "%F %T" "2016-02-03 15:53:25"
