@@ -58,39 +58,30 @@ monthly = fromIntegral $ daily * 30
 -- delete events > 30 days old, performed daily
 expireOld db = do
   today <- getCurrentTime
-  dbResp <- DB.runRedis db $ DB.get "expireOld"
-  case dbResp of
-    Left reply -> print reply
-    Right flag ->
-      case flag of
-        Nothing -> do
-          --flag expired, need to redo the task
-          putStrLn "deleting old records."
-          dbResp <- DB.runRedis db $ DB.smembers "events"
-          case dbResp of
-            Left reply -> print reply
-            Right events -> do
-              flip mapM_ events $ \evt ->
-                DB.runRedis db $ do
-                  dbResp <- DB.hget evt "date"
-                  case dbResp of
-                    Left reply -> liftIO $ print reply
-                    Right date -> do
-                      case date of
-                        Nothing -> removeEvent evt
-                        Just validDate -> do
-                          case parseAchaeaTime validDate of
-                            Nothing -> removeEvent evt
-                            Just eventTime ->
-                              case diffUTCTime today eventTime > monthly of
-                                False -> return ()
-                                True -> removeEvent evt
-          --set the flag again
-          DB.runRedis db $ do
-            DB.set "expireOld" "false" --value doesn't really matter
-            DB.expire "expireOld" daily
-          return ()
-        Just validFlag -> return ()
+  expireFlag <- DB.runRedis db $ DB.get "expireOld"
+  case fromR expireFlag of
+    Just validFlag -> return ()
+    Nothing -> do
+      --flag expired, need to redo the task
+      putStrLn "deleting old records."
+      events <- DB.runRedis db $ DB.smembers "events"
+      forM_ (fromR events) $ \evt ->
+        DB.runRedis db $ do
+          date <- DB.hget evt "date"
+          case fromR date >>= parseAchaeaTime of
+            Nothing -> removeEvent evt
+            Just parsedDate ->
+              when (diffUTCTime today parsedDate > monthly)
+                removeEvent evt
+      --set the flag again
+      DB.runRedis db $ do
+        DB.set "expireOld" "false" --value doesn't really matter
+        DB.expire "expireOld" daily
+      return ()
+
+fromR :: Either DB.Reply a -> a
+fromR (Left resp) = error $ show resp
+fromR (Right a) = a
 
 removeEvent evt = do
   DB.del [evt]
@@ -99,29 +90,26 @@ removeEvent evt = do
 
 parseAchaeaTime :: ByteString -> Maybe UTCTime
 parseAchaeaTime =
-  (parseTimeM False defaultTimeLocale "%F %T") . BS.unpack
+  parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
 
 updateEvents db = do
-  dbResp <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
-  case dbResp of
-    Left reply -> print reply
-    Right prevID ->
-      case prevID of
-        Nothing -> putStrLn "prevID not found (should never happen)"
-        Just validID -> do
-          let validID' = read . BS.unpack $ validID
-          newEvents <- getKills (Just validID')
-          case newEvents of
-            Nothing -> putStrLn "something went wrong while fetching data."
-            Just validEvents -> do
-              let idList = map (id_ . details) validEvents
-                  newID = maximumDef validID' idList
-              DB.runRedis db $ do
-                DB.set "prevID" $ BS.pack . show $ newID
-                DB.sadd "events" $ map (BS.pack . show) idList
-                mapM_ storeEvent validEvents
-              let tweets = map printKill validEvents
-              mapM_ (putStrLn . T.unpack) tweets
+  prevID <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
+  case fromR prevID of
+    Nothing -> putStrLn "prevID not found (should never happen)"
+    Just validID -> do
+      let validID' = read . BS.unpack $ validID
+      newEvents <- getKills (Just validID')
+      case newEvents of
+        Nothing -> putStrLn "something went wrong while fetching data."
+        Just validEvents -> do
+          let idList = map (id_ . details) validEvents
+              newID = maximumDef validID' idList
+          DB.runRedis db $ do
+            DB.set "prevID" $ BS.pack . show $ newID
+            DB.sadd "events" $ map (BS.pack . show) idList
+            mapM_ storeEvent validEvents
+          let tweets = map printKill validEvents
+          mapM_ (putStrLn . T.unpack) tweets
 
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
