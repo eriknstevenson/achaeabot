@@ -52,13 +52,11 @@ monthly = fromIntegral $ daily * 30
 expireOld db = do
   today <- getCurrentTime
   expireFlag <- DB.runRedis db $ DB.get "expireOld"
-  case fromR expireFlag of
-    Just validFlag -> return ()
-    Nothing -> do
-      putStrLn "deleting old records."
-      events <- DB.runRedis db $ DB.smembers "events"
-      forM_ (fromR events) (checkDate db today)
-      setTimer db "expireOld" daily
+  whenMissing (fromR expireFlag) $ do
+    putStrLn "deleting old records."
+    events <- DB.runRedis db $ DB.smembers "events"
+    forM_ (fromR events) (checkDate db today)
+    setTimer db "expireOld" daily
 
 setTimer db k t =
   DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
@@ -80,6 +78,10 @@ checkDate db currentTime evtID = DB.runRedis db $ do
 fromR :: Either DB.Reply a -> a
 fromR (Left resp) = error $ show resp
 fromR (Right a) = a
+
+whenMissing :: Applicative f => Maybe a -> f () -> f ()
+whenMissing Nothing f = f
+whenMissing _ _ = pure ()
 
 updateEvents db = do
   prevID <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
