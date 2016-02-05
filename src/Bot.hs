@@ -51,29 +51,24 @@ checkFlag db k t f = do
     f db
     DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
 
--- delete events > 30 days old, performed daily
+-- delete events > 30 days old, checked daily
 expireOld :: DB.Connection -> IO ()
 expireOld db = checkFlag db "expireOld" daily $ \db -> do
   today <- liftIO getCurrentTime
   putStrLn "deleting old records."
   events <- DB.runRedis db $ DB.smembers "events"
   forM_ (fromR events) (checkDate db today)
-
---TODO: collapse this into expireOld ??
-checkDate :: DB.Connection -> UTCTime -> ByteString -> IO ()
-checkDate db currentTime evtID = DB.runRedis db $ do
-  date <- DB.hget evtID "date"
-  case fromR date >>= parseAchaeaTime of
-    Nothing -> removeEvent evtID
-    Just parsedDate ->
-      when (diffUTCTime currentTime parsedDate > fromIntegral monthly)
-        (removeEvent evtID)
-  where
-    removeEvent evt = do
-      DB.del [evt] >> DB.srem "events" [evt]
-      return ()
+  where 
+    removeEvent evt = DB.del [evt] >> DB.srem "events" [evt] >> return ()
     parseAchaeaTime =
       parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
+    checkDate db currentTime evtID = DB.runRedis db $ do
+      date <- DB.hget evtID "date"
+      case fromR date >>= parseAchaeaTime of
+        Nothing -> removeEvent evtID
+        Just parsedDate ->
+          when (diffUTCTime currentTime parsedDate > fromIntegral monthly)
+            (removeEvent evtID)
 
 updateEvents :: DB.Connection -> IO ()
 updateEvents db = do
@@ -123,7 +118,7 @@ setupAuth = do
 
 fromR :: Either DB.Reply a -> a
 fromR (Left  resp) = error $ show resp
-fromR (Right a)   = a
+fromR (Right a)    = a
 
 whenMissing :: Applicative f => Maybe a -> f () -> f ()
 whenMissing Nothing f = f
