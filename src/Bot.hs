@@ -46,30 +46,34 @@ oneMinute = 1000000 * 60
 minutely = 60
 hourly = minutely * 60
 daily = hourly * 24
-monthly = fromIntegral $ daily * 30
+monthly = daily * 30
 
 -- delete events > 30 days old, performed daily
+expireOld :: DB.Connection -> IO ()
 expireOld db = checkFlag db "expireOld" daily $ \db -> do
   testToday <- liftIO getCurrentTime
   putStrLn "deleting old records."
   events <- DB.runRedis db $ DB.smembers "events"
   forM_ (fromR events) (checkDate db testToday)
 
-checkFlag db k freq f = do
+checkFlag :: DB.Connection           -- ^ Redis connection
+          -> ByteString              -- ^ Redis 'key' used for flag
+          -> Integer                 -- ^ Time delay (seconds)
+          -> (DB.Connection -> IO a) -- ^ Action if flag not found
+          -> IO ()
+checkFlag db k t f = do
   flag <- DB.runRedis db $ DB.get k
   whenMissing (fromR flag) $ do
     f db
-    setTimer db k freq
+    DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
 
-setTimer db k t =
-  DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
-
+checkDate :: DB.Connection -> UTCTime -> ByteString -> IO ()
 checkDate db currentTime evtID = DB.runRedis db $ do
   date <- DB.hget evtID "date"
   case fromR date >>= parseAchaeaTime of
     Nothing -> removeEvent evtID
     Just parsedDate ->
-      when (diffUTCTime currentTime parsedDate > monthly)
+      when (diffUTCTime currentTime parsedDate > fromIntegral monthly)
         (removeEvent evtID)
   where
     removeEvent evt = do
@@ -90,6 +94,7 @@ whenPresent :: Applicative f => Maybe a ->(a -> f ()) -> f ()
 whenPresent (Just x) f = f x
 whenPresent _ _ = pure ()
 
+updateEvents :: DB.Connection -> IO ()
 updateEvents db = do
   prevID <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
   case fromR prevID of
@@ -107,6 +112,7 @@ updateEvents db = do
           mapM_ storeEvent validEvents
         mapM_ (putStrLn . T.unpack) tweets
 
+storeEvent :: DB.RedisCtx m f => GameEvent -> m ()
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
   DB.hset key "date" $ T.encodeUtf8 . date . details $ evt
@@ -116,6 +122,7 @@ storeEvent evt = do
   DB.hset key "victimName" $ getData victim name
   DB.hset key "victimCity" $ getData victim city
   DB.hset key "victimClass" $ getData victim class_
+  return ()
   where getData char field = T.encodeUtf8 . field . char $ evt
 
 printKill :: GameEvent -> Text
