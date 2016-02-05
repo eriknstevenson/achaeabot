@@ -88,7 +88,7 @@ expireOld db = do
           --set the flag again
           DB.runRedis db $ do
             DB.set "expireOld" "false" --value doesn't really matter
-            DB.expire "expireOld" minutely
+            DB.expire "expireOld" daily
           return ()
         Just validFlag -> return ()
 
