@@ -19,11 +19,11 @@ import           Data.Time.Format
 import qualified Database.Redis as DB
 import           Network.HTTP.Client.Conduit
 import           Safe
+import           System.Environment (getEnv)
+import           Web.Authenticate.OAuth
 import qualified Web.Twitter.Conduit as CT
 
-import           Bot.Database
 import           Bot.GameAPI
-import           Bot.TwitterAPI
 
 main' :: IO ()
 main' = do
@@ -127,5 +127,16 @@ storeEvent evt = do
 
 printKill :: GameEvent -> Text
 printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
+
+setupAuth :: IO CT.TWInfo
+setupAuth = do
+  consumerKey <- BS.pack <$> getEnv "ACHAEACONSUMERKEY"
+  consumerSecret <- BS.pack <$> getEnv "ACHAEACONSUMERSECRET"
+  token <- BS.pack <$> getEnv "ACHAEATOKEN"
+  tokenKey <- BS.pack <$> getEnv "ACHAEATOKENSECRET"
+  let oauth = CT.twitterOAuth { oauthConsumerKey = consumerKey
+                              , oauthConsumerSecret = consumerSecret }
+      cred = newCredential token tokenKey
+  return $ CT.setCredential oauth cred def
 
 --runResourceT $ call twInfo mgr $ apicall
