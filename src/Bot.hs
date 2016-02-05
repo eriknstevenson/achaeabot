@@ -116,7 +116,7 @@ setupAuth = do
   consumerSecret <- BS.pack <$> getEnv "ACHAEACONSUMERSECRET"
   token          <- BS.pack <$> getEnv "ACHAEATOKEN"
   tokenKey       <- BS.pack <$> getEnv "ACHAEATOKENSECRET"
-  let oauth = CT.twitterOAuth { oauthConsumerKey = consumerKey
+  let oauth = CT.twitterOAuth { oauthConsumerKey    = consumerKey
                               , oauthConsumerSecret = consumerSecret }
       cred = newCredential token tokenKey
   return $ CT.setCredential oauth cred def
