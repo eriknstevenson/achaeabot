@@ -112,10 +112,10 @@ printKill x = T.concat [ "Oh snap! ", name . killer $ x, " just killed ", name .
 --runResourceT $ call twInfo mgr $ apicall
 setupAuth :: IO CT.TWInfo
 setupAuth = do
-  consumerKey <- BS.pack <$> getEnv "ACHAEACONSUMERKEY"
+  consumerKey    <- BS.pack <$> getEnv "ACHAEACONSUMERKEY"
   consumerSecret <- BS.pack <$> getEnv "ACHAEACONSUMERSECRET"
-  token <- BS.pack <$> getEnv "ACHAEATOKEN"
-  tokenKey <- BS.pack <$> getEnv "ACHAEATOKENSECRET"
+  token          <- BS.pack <$> getEnv "ACHAEATOKEN"
+  tokenKey       <- BS.pack <$> getEnv "ACHAEATOKENSECRET"
   let oauth = CT.twitterOAuth { oauthConsumerKey = consumerKey
                               , oauthConsumerSecret = consumerSecret }
       cred = newCredential token tokenKey
