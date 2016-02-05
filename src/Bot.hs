@@ -45,7 +45,7 @@ oneMinute = 1000000 * 60
 --seconds used for redis expire
 minutely = 60
 hourly = minutely * 60
-daily = 5*minutely -- hourly * 24
+daily = hourly * 24
 monthly = fromIntegral $ daily * 30
 
 -- delete events > 30 days old, performed daily
