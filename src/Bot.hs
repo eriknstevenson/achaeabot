@@ -28,8 +28,8 @@ import           Bot.GameAPI
 main' :: IO ()
 main' = do
   twInfo <- setupAuth
-  mgr <- newManager
-  db <- DB.connect DB.defaultConnectInfo
+  mgr    <- newManager
+  db     <- DB.connect DB.defaultConnectInfo
   runBot twInfo mgr db
 
 runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
@@ -37,28 +37,12 @@ runBot twInfo mgr db = forever $ do
   updateEvents db
   expireOld db
   pauseFor oneMinute
-
---microseconds used for threaddelay
-pauseFor = liftIO . threadDelay
-oneMinute = 1000000 * 60
-
---seconds used for redis expire
-minutely = 60
-hourly = minutely * 60
-daily = hourly * 24
-monthly = daily * 30
-
--- delete events > 30 days old, performed daily
-expireOld :: DB.Connection -> IO ()
-expireOld db = checkFlag db "expireOld" daily $ \db -> do
-  testToday <- liftIO getCurrentTime
-  putStrLn "deleting old records."
-  events <- DB.runRedis db $ DB.smembers "events"
-  forM_ (fromR events) (checkDate db testToday)
+  where pauseFor  = liftIO . threadDelay
+        oneMinute = 60 * 1000 * 1000
 
 checkFlag :: DB.Connection           -- ^ Redis connection
           -> ByteString              -- ^ Redis 'key' used for flag
-          -> Integer                 -- ^ Time delay (seconds)
+          -> Frequency               -- ^ Time delay (seconds)
           -> (DB.Connection -> IO a) -- ^ Action if flag not found
           -> IO ()
 checkFlag db k t f = do
@@ -67,6 +51,15 @@ checkFlag db k t f = do
     f db
     DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
 
+-- delete events > 30 days old, performed daily
+expireOld :: DB.Connection -> IO ()
+expireOld db = checkFlag db "expireOld" daily $ \db -> do
+  today <- liftIO getCurrentTime
+  putStrLn "deleting old records."
+  events <- DB.runRedis db $ DB.smembers "events"
+  forM_ (fromR events) (checkDate db today)
+
+--TODO: collapse this into expireOld ??
 checkDate :: DB.Connection -> UTCTime -> ByteString -> IO ()
 checkDate db currentTime evtID = DB.runRedis db $ do
   date <- DB.hget evtID "date"
@@ -82,18 +75,6 @@ checkDate db currentTime evtID = DB.runRedis db $ do
     parseAchaeaTime =
       parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
 
-fromR :: Either DB.Reply a -> a
-fromR (Left resp) = error $ show resp
-fromR (Right a) = a
-
-whenMissing :: Applicative f => Maybe a -> f () -> f ()
-whenMissing Nothing f = f
-whenMissing _ _ = pure ()
-
-whenPresent :: Applicative f => Maybe a ->(a -> f ()) -> f ()
-whenPresent (Just x) f = f x
-whenPresent _ _ = pure ()
-
 updateEvents :: DB.Connection -> IO ()
 updateEvents db = do
   prevID <- DB.runRedis db $ DB.setnx "prevID" "0" >> DB.get "prevID"
@@ -104,7 +85,7 @@ updateEvents db = do
       newEvents <- getKills (Just validID')
       whenPresent newEvents $ \validEvents -> do
         let idList = map (id_ . details) validEvents
-            newID = maximumDef validID' idList
+            newID  = maximumDef validID' idList
             tweets = map printKill validEvents
         DB.runRedis db $ do
           DB.set "prevID" $ BS.pack . show $ newID
@@ -116,18 +97,19 @@ storeEvent :: DB.RedisCtx m f => GameEvent -> m ()
 storeEvent evt = do
   let key = BS.pack . show $ id_ . details $ evt
   DB.hset key "date" $ T.encodeUtf8 . date . details $ evt
-  DB.hset key "killerName" $ getData killer name
-  DB.hset key "killerCity" $ getData killer city
+  DB.hset key "killerName"  $ getData killer name
+  DB.hset key "killerCity"  $ getData killer city
   DB.hset key "killerClass" $ getData killer class_
-  DB.hset key "victimName" $ getData victim name
-  DB.hset key "victimCity" $ getData victim city
+  DB.hset key "victimName"  $ getData victim name
+  DB.hset key "victimCity"  $ getData victim city
   DB.hset key "victimClass" $ getData victim class_
   return ()
   where getData char field = T.encodeUtf8 . field . char $ evt
 
 printKill :: GameEvent -> Text
-printKill x = T.concat ["Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
+printKill x = T.concat [ "Oh snap! ", name . killer $ x, " just killed ", name . victim $ x, "!"]
 
+--runResourceT $ call twInfo mgr $ apicall
 setupAuth :: IO CT.TWInfo
 setupAuth = do
   consumerKey <- BS.pack <$> getEnv "ACHAEACONSUMERKEY"
@@ -139,4 +121,27 @@ setupAuth = do
       cred = newCredential token tokenKey
   return $ CT.setCredential oauth cred def
 
---runResourceT $ call twInfo mgr $ apicall
+fromR :: Either DB.Reply a -> a
+fromR (Left  resp) = error $ show resp
+fromR (Right a)   = a
+
+whenMissing :: Applicative f => Maybe a -> f () -> f ()
+whenMissing Nothing f = f
+whenMissing _       _ = pure ()
+
+whenPresent :: Applicative f => Maybe a ->(a -> f ()) -> f ()
+whenPresent (Just x) f = f x
+whenPresent _        _ = pure ()
+
+-- Times (in seconds) used for expire keys
+type Frequency = Integer
+
+minutely :: Frequency
+hourly   :: Frequency
+daily    :: Frequency
+monthly  :: Frequency
+
+minutely = 60
+hourly   = minutely * 60
+daily    = hourly   * 24
+monthly  = daily    * 30
