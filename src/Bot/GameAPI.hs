@@ -7,8 +7,6 @@ module Bot.GameAPI ( getKills
                    , GameEvent (..)
                    , Character (..)
                    , Event (..)
-                   --temporary
-                   , gameFeed
                    ) where
 
 import           Control.Applicative
@@ -47,8 +45,6 @@ gameFeed :: Maybe Int -> EitherT ServantError IO [Event]
 
 getOnline :<|> getCharacter' :<|> gameFeed = client achaeaAPI (BaseUrl Http "api.achaea.com" 80)
 
-
--- "Online" is not really used for anything atm
 data Online = Online { count :: Int
                      , characters :: [Text]
                      } deriving (Show)
@@ -115,7 +111,6 @@ getKills id_ = do
       return . Just $ evts
     Left str -> do
       return Nothing
-      --error "Invalid API request"
   where
     onlyDeaths = filter (\evt -> type_ evt == DEA)
 
