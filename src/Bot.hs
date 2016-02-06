@@ -2,6 +2,7 @@
 
 module Bot where
 
+import           Control.Arrow
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -9,7 +10,9 @@ import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Function (on)
 import           Data.List
+import           Data.Maybe (catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -20,7 +23,7 @@ import qualified Database.Redis as DB
 import           Network.HTTP.Client.Conduit
 import           Safe
 import           System.Environment (getEnv)
-import           Web.Authenticate.OAuth
+import           Web.Authenticate.OAuth hiding (delete)
 import qualified Web.Twitter.Conduit as CT
 
 import           Bot.GameAPI
@@ -36,6 +39,7 @@ runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = forever $ do
   updateEvents db
   expireOld db
+  weeklyTop3Classes db
   pauseFor oneMinute
   where pauseFor  = liftIO . threadDelay
         oneMinute = 60 * 1000 * 1000
@@ -51,24 +55,61 @@ checkFlag db k t f = do
     f db
     DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
 
+weeklyTop3Classes db = checkFlag db "weeklyTopClass" weekly $ \db -> do
+  today <- liftIO getCurrentTime
+  events <- DB.runRedis db getEvents
+  fromLastWeek <- forM (fromR events) $ \evtID -> do
+    date <- DB.runRedis db $ getDate evtID
+    case fromR date >>= parseAchaeaTime >>= lastWeek today of
+      Nothing -> return Nothing
+      Just _ -> return . Just $ evtID
+  classesUsed <- forM (catMaybes fromLastWeek) $ \evtID -> do
+    classUsed <- DB.runRedis db $ getKClass evtID
+    case fromR classUsed of
+      Nothing -> return Nothing
+      Just validClass -> return . Just $ validClass
+  let counts = sortSndDesc . occurrences . catMaybes $ classesUsed
+      top3 = take 3 counts
+      classNames = map (BS.unpack . fst) top3
+      opClasses = fmtList classNames
+  putStrLn $ "The most OP classes of the past week are " ++ opClasses
+  where
+    lastWeek currentTime date =
+      if diffUTCTime currentTime date < fromIntegral weekly
+         then Just date
+         else Nothing
+    sortSndDesc = sortBy (flip compare `on` snd)
+
+getKClass evtID = DB.hget evtID "killerClass"
+getDate evtID = DB.hget evtID "date"
+getEvents = DB.smembers "events"
+
+occurrences xs = map (head &&& length) (group . sort $ xs)
+
+fmtList :: [String] -> String
+fmtList xs = fmt ++ "."
+  where fmt = concat . reverse $ head commaSep:"and ":tail commaSep
+        commaSep = reverse $ intersperse ", " xs
+
 -- delete events > 30 days old, checked daily
 expireOld :: DB.Connection -> IO ()
 expireOld db = checkFlag db "expireOld" daily $ \db -> do
   today <- liftIO getCurrentTime
   putStrLn "deleting old records."
-  events <- DB.runRedis db $ DB.smembers "events"
+  events <- DB.runRedis db getEvents
   forM_ (fromR events) (checkDate db today)
-  where 
+  where
     removeEvent evt = DB.del [evt] >> DB.srem "events" [evt] >> return ()
-    parseAchaeaTime =
-      parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
     checkDate db currentTime evtID = DB.runRedis db $ do
-      date <- DB.hget evtID "date"
+      date <- getDate evtID
       case fromR date >>= parseAchaeaTime of
         Nothing -> removeEvent evtID
         Just parsedDate ->
-          when (diffUTCTime currentTime parsedDate > fromIntegral monthly)
-            (removeEvent evtID)
+          when (diffUTCTime currentTime parsedDate > fromIntegral monthly) $
+            removeEvent evtID
+
+parseAchaeaTime =
+  parseTimeM False defaultTimeLocale "%F %T" . BS.unpack
 
 updateEvents :: DB.Connection -> IO ()
 updateEvents db = do
@@ -139,4 +180,5 @@ monthly  :: Frequency
 minutely = 60
 hourly   = minutely * 60
 daily    = hourly   * 24
+weekly   = daily    * 7
 monthly  = daily    * 30
