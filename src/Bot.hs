@@ -86,13 +86,13 @@ top3 db range rangeStr f t twInfo mgr =
     sortSndDesc = sortBy (flip compare `on` snd)
 
 dailyPlayers db = top3 db daily "24hrPlayer" getKName
-  "The deadliest adventurers during the last 24 hours were"
+  "the deadliest adventurers in #achaea during the last 24 hours were"
 
 weeklyPlayers db = top3 db weekly "weekPlayer" getKName
-  "The deadliest adventurers of last week were"
+  "the deadliest adventurers in #achaea last week were"
 
 weeklyClasses db = top3 db weekly "weekClass" getKClass
-  "The most OP classes of last week were"
+  "the most OP classes of #achaea last week were"
 
 getKClass evtID = DB.hget evtID "killerClass"
 getKName evtID = DB.hget evtID "killerName"
