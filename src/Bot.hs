@@ -39,72 +39,59 @@ runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = forever $ do
   updateEvents db
   expireOld db
-  weeklyTop3Classes db
+  weeklyClasses db
+  weeklyPlayers db
+  dailyPlayers db
   pauseFor oneMinute
   where pauseFor  = liftIO . threadDelay
         oneMinute = 60 * 1000 * 1000
 
 checkFlag :: DB.Connection           -- ^ Redis connection
-          -> ByteString              -- ^ Redis 'key' used for flag
+          -> String                  -- ^ Redis 'key' used for flag
           -> Frequency               -- ^ Time delay (seconds)
           -> (DB.Connection -> IO a) -- ^ Action if flag not found
           -> IO ()
 checkFlag db k t f = do
-  flag <- DB.runRedis db $ DB.get k
+  flag <- DB.runRedis db $ DB.get k'
   whenMissing (fromR flag) $ do
     f db
-    DB.runRedis db $ DB.set k "" >> DB.expire k t >> return ()
+    DB.runRedis db $ DB.set k' "" >> DB.expire k' t >> return ()
+  where k' = BS.pack k
 
-
-weeklyTop3Players db = checkFlag db "weeklyTopPlayer" weekly $ \db -> do
-  today <- liftIO getCurrentTime
-  events <- DB.runRedis db getEvents
-  fromLastWeek <- forM (fromR events) $ \evtID -> do
-    date <- DB.runRedis db $ getDate evtID
-    case fromR date >>= parseAchaeaTime >>= lastWeek today of
-      Nothing -> return Nothing
-      Just _ -> return . Just $ evtID
-  killerNames <- forM (catMaybes fromLastWeek) $ \evtID -> do
-    kName <- DB.runRedis db $ getKName evtID
-    case fromR kName of
-      Nothing -> return Nothing
-      Just validName -> return . Just $ validName
-  let counts = sortSndDesc . occurrences . catMaybes $ killerNames
-      top3 = take 3 counts
-      killers = map (BS.unpack . fst) top3
-      opPlayers = fmtList killers
-  putStrLn $ "The most OP adventurers last week were " ++ opPlayers
+top3 db range rangeStr f t =
+  checkFlag db rangeStr range $ \db -> do
+    today <- liftIO getCurrentTime
+    events <- DB.runRedis db getEvents
+    fromRange <- forM (fromR events) $ \evtID -> do
+      date <- DB.runRedis db $ getDate evtID
+      case fromR date >>= parseAchaeaTime >>= inRange today of
+        Nothing -> return Nothing
+        Just _ -> return . Just $ evtID
+    fList <- forM (catMaybes fromRange) $ \evtID -> do
+      fRes <- DB.runRedis db $ f evtID
+      case fromR fRes of
+        Nothing -> return Nothing
+        Just valid -> return . Just $ valid
+    let counts = sortSndDesc . occurrences . catMaybes $ fList
+        top3 = take 3 counts
+        topNames = map (BS.unpack . fst) top3
+        formatted = fmtList topNames
+    putStrLn $ t ++ " " ++ formatted
   where
-    lastWeek currentTime date =
-      if diffUTCTime currentTime date < fromIntegral weekly
-         then Just date
-         else Nothing
+    inRange currentTime date =
+      if diffUTCTime currentTime date < fromIntegral range
+        then Just date
+        else Nothing
     sortSndDesc = sortBy (flip compare `on` snd)
 
-weeklyTop3Classes db = checkFlag db "weeklyTopClass" weekly $ \db -> do
-  today <- liftIO getCurrentTime
-  events <- DB.runRedis db getEvents
-  fromLastWeek <- forM (fromR events) $ \evtID -> do
-    date <- DB.runRedis db $ getDate evtID
-    case fromR date >>= parseAchaeaTime >>= lastWeek today of
-      Nothing -> return Nothing
-      Just _ -> return . Just $ evtID
-  classesUsed <- forM (catMaybes fromLastWeek) $ \evtID -> do
-    classUsed <- DB.runRedis db $ getKClass evtID
-    case fromR classUsed of
-      Nothing -> return Nothing
-      Just validClass -> return . Just $ validClass
-  let counts = sortSndDesc . occurrences . catMaybes $ classesUsed
-      top3 = take 3 counts
-      classNames = map (BS.unpack . fst) top3
-      opClasses = fmtList classNames
-  putStrLn $ "The most OP classes of the past week are " ++ opClasses
-  where
-    lastWeek currentTime date =
-      if diffUTCTime currentTime date < fromIntegral weekly
-         then Just date
-         else Nothing
-    sortSndDesc = sortBy (flip compare `on` snd)
+dailyPlayers db = top3 db daily "24hrPlayer" getKName
+  "The deadliest adventurers during the last 24 hours were"
+
+weeklyPlayers db = top3 db weekly "weekPlayer" getKName
+  "The deadliest adventurers of the past week were"
+
+weeklyClasses db = top3 db weekly "weekClass" getKClass
+  "The most OP classes of the last week were"
 
 getKClass evtID = DB.hget evtID "killerClass"
 getKName evtID = DB.hget evtID "killerName"
@@ -118,7 +105,6 @@ fmtList xs = fmt ++ "."
   where fmt = concat . reverse $ head commaSep:"and ":tail commaSep
         commaSep = reverse $ intersperse ", " xs
 
--- delete events > 30 days old, checked daily
 expireOld :: DB.Connection -> IO ()
 expireOld db = checkFlag db "expireOld" daily $ \db -> do
   today <- liftIO getCurrentTime
