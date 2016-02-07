@@ -7,6 +7,7 @@ import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
+import           Control.Monad.Trans.Resource
 import           Control.Monad.Trans.State
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -39,9 +40,9 @@ runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = forever $ do
   updateEvents db
   expireOld db
-  weeklyClasses db
-  weeklyPlayers db
-  dailyPlayers db
+  weeklyClasses db twInfo mgr
+  weeklyPlayers db twInfo mgr
+  dailyPlayers db twInfo mgr
   pauseFor oneMinute
   where pauseFor  = liftIO . threadDelay
         oneMinute = 60 * 1000 * 1000
@@ -58,7 +59,7 @@ checkFlag db k t f = do
     DB.runRedis db $ DB.set k' "" >> DB.expire k' t >> return ()
   where k' = BS.pack k
 
-top3 db range rangeStr f t =
+top3 db range rangeStr f t twInfo mgr =
   checkFlag db rangeStr range $ \db -> do
     today <- liftIO getCurrentTime
     events <- DB.runRedis db getEvents
@@ -76,7 +77,7 @@ top3 db range rangeStr f t =
         top3 = take 3 counts
         topNames = map (BS.unpack . fst) top3
         formatted = fmtList topNames
-    putStrLn $ t ++ " " ++ formatted
+    runResourceT $ CT.call twInfo mgr $ CT.update . T.pack $ t ++ " " ++ formatted
   where
     inRange currentTime date =
       if diffUTCTime currentTime date < fromIntegral range
@@ -88,10 +89,10 @@ dailyPlayers db = top3 db daily "24hrPlayer" getKName
   "The deadliest adventurers during the last 24 hours were"
 
 weeklyPlayers db = top3 db weekly "weekPlayer" getKName
-  "The deadliest adventurers of the past week were"
+  "The deadliest adventurers of last week were"
 
 weeklyClasses db = top3 db weekly "weekClass" getKClass
-  "The most OP classes of the last week were"
+  "The most OP classes of last week were"
 
 getKClass evtID = DB.hget evtID "killerClass"
 getKName evtID = DB.hget evtID "killerName"
