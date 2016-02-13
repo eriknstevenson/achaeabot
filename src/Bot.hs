@@ -43,6 +43,7 @@ runBot twInfo mgr db = forever $ do
   weeklyClasses db twInfo mgr
   weeklyPlayers db twInfo mgr
   dailyPlayers db twInfo mgr
+  dailyDeaths db twInfo mgr
   pauseFor oneMinute
   where pauseFor  = liftIO . threadDelay
         oneMinute = 60 * 1000 * 1000
@@ -87,6 +88,9 @@ top3 db range rangeStr f t twInfo mgr =
 
 dailyPlayers db = top3 db daily "24hrPlayer" getKName
   "the deadliest adventurers in #achaea during the last 24 hours were"
+  
+dailyDeaths db = top3 db daily "24hrDeaths" getVName
+  "the adventurers of #achaea that died the most in the past 24 hours were"
 
 weeklyPlayers db = top3 db weekly "weekPlayer" getKName
   "the deadliest adventurers in #achaea last week were"
@@ -98,6 +102,7 @@ getKClass evtID = DB.hget evtID "killerClass"
 getKName evtID = DB.hget evtID "killerName"
 getDate evtID = DB.hget evtID "date"
 getEvents = DB.smembers "events"
+getVName evtID = DB.hget evtID "victimName"
 
 occurrences xs = map (head &&& length) (group . sort $ xs)
 
@@ -141,6 +146,7 @@ updateEvents db = do
           DB.set "prevID" $ BS.pack . show $ newID
           DB.sadd "events" $ map (BS.pack . show) idList
           mapM_ storeEvent validEvents
+          DB.bgsave
         mapM_ (putStrLn . T.unpack) tweets
 
 storeEvent :: DB.RedisCtx m f => GameEvent -> m ()
