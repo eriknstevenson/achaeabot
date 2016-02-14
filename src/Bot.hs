@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bot where
+module Bot (runBot) where
 
 import           Control.Arrow
 import           Control.Concurrent
@@ -28,13 +28,6 @@ import           Web.Authenticate.OAuth hiding (delete)
 import qualified Web.Twitter.Conduit as CT
 
 import           Bot.GameAPI
-
-main' :: IO ()
-main' = do
-  twInfo <- setupAuth
-  mgr    <- newManager
-  db     <- DB.connect DB.defaultConnectInfo
-  runBot twInfo mgr db
 
 runBot :: CT.TWInfo -> Manager -> DB.Connection -> IO ()
 runBot twInfo mgr db = forever $ do
