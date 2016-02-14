@@ -21,6 +21,9 @@ See [Issues](https://github.com/narrative/achaeabot/issues)
 ## Building
     $ git clone https://github.com/narrative/achaeabot.git
     $ stack build
+    $ stack exec achaeabot-exe
+    
+The environment variables ```ACHAEACONSUMERKEY```, ```ACHAEACONSUMERSECRET```, ```ACHAEATOKEN```, and ```ACHAEATOKENSECRET``` are used for Twitter authentication. Visit [Twitter Developers](http://dev.twitter.com) for information on obtaining access tokens.
 
 ## Running the (non-existent) tests
     $ stack test
