@@ -20,10 +20,13 @@ See [Issues](https://github.com/narrative/achaeabot/issues)
 
 ## Building
     $ git clone https://github.com/narrative/achaeabot.git
+    $ cd achaeabot
     $ stack build
     $ stack exec achaeabot-exe
     
 The environment variables ```ACHAEACONSUMERKEY```, ```ACHAEACONSUMERSECRET```, ```ACHAEATOKEN```, and ```ACHAEATOKENSECRET``` are used for Twitter authentication. Visit [Twitter Developers](http://dev.twitter.com) for information on obtaining access tokens.
+
+Additionally, the bot requires redis-server to be running on the default port (6379).
 
 ## Running the (non-existent) tests
     $ stack test
